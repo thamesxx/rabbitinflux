@@ -1,21 +1,21 @@
 services:
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"       # AMQP port for clients
-      - "15672:15672"     # Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     networks:
       - rabbitnet
 
-  producer:
+  scada-producer:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: scada_producer
+    container_name: scada-producer
     env_file: ../.env
     command: ["python", "producer.py"]
     depends_on:
