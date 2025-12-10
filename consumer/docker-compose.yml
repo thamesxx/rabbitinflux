@@ -27,8 +27,8 @@ services:
       dockerfile: Dockerfile
     container_name: scada_consumer
     environment:
-      RABBIT_MQ_HOST: 0.tcp.ap.ngrok.io
-      RABBIT_MQ_PORT: 14168
+      RABBIT_MQ_HOST: rabbitmq
+      RABBIT_MQ_PORT: 5672
       RABBIT_MQ_USER: guest
       RABBIT_MQ_PASSWORD: guest
       RABBIT_MQ_EXCHANGE: scada_data

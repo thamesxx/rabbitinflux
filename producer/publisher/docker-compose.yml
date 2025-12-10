@@ -1,0 +1,14 @@
+services:
+  publisher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scada-publisher
+    env_file: ../.env
+    networks:
+      - setup_rabbitnet
+    restart: unless-stopped
+
+networks:
+  setup_rabbitnet:
+    external: true
