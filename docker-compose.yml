@@ -1,0 +1,54 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_MQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_MQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app_network
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - app_network
+
+  consumer:
+    build: ./consumer
+    container_name: scada_consumer
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - influxdb
+    networks:
+      - app_network
+
+  producer:    # optional test tool
+    build: ./producer
+    container_name: scada_producer
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
+  influxdb_data:
