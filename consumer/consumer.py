@@ -118,16 +118,20 @@ def connect_and_consume():
             logger.info("Connected to RabbitMQ")
 
             ch = connection.channel()
-            ch.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
+            
+            # FIXED: Changed to 'topic' to match producer
+            ch.exchange_declare(exchange=EXCHANGE, exchange_type="topic", durable=True)
 
             # Normal queue
             ch.queue_declare(queue=QUEUE, durable=True)
             ch.queue_bind(exchange=EXCHANGE, queue=QUEUE, routing_key=ROUTING)
+            logger.info(f"Bound queue '{QUEUE}' to exchange '{EXCHANGE}' with routing key '{ROUTING}'")
             ch.basic_consume(queue=QUEUE, on_message_callback=on_message)
 
             # Health queue
             ch.queue_declare(queue=HEALTH_QUEUE, durable=True)
             ch.queue_bind(exchange=EXCHANGE, queue=HEALTH_QUEUE, routing_key=HEALTH_ROUTING)
+            logger.info(f"Bound queue '{HEALTH_QUEUE}' to exchange '{EXCHANGE}' with routing key '{HEALTH_ROUTING}'")
             ch.basic_consume(queue=HEALTH_QUEUE, on_message_callback=on_health_message)
 
             logger.info("Waiting for messages...")
