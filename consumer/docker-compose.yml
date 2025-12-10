@@ -1,0 +1,34 @@
+services:
+  consumer:
+    build: ./consumer
+    container_name: scada_consumer
+    environment:
+      RABBIT_MQ_HOST: 0.tcp.ngrok.io
+      RABBIT_MQ_PORT: 14168
+      RABBIT_MQ_USER: guest
+      RABBIT_MQ_PASSWORD: guest
+
+      RABBIT_MQ_EXCHANGE: scada_data
+      RABBIT_MQ_QUEUE: scada_data_queue
+      RABBIT_MQ_ROUTING_KEY: scada.tag.data
+
+      # InfluxDB settings remain unchanged
+      INFLUX_DB_URL: http://influxdb:8086
+      INFLUX_DB_TOKEN: your-token
+      INFLUX_DB_ORG: your-org
+      INFLUX_DB_BUCKET_NS: scada_bucket
+      INFLUX_DB_MEASUREMENT: sensor_data
+
+    networks:
+      - app_network
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    networks:
+      - app_network
+
+networks:
+  app_network:
