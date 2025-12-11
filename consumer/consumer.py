@@ -60,10 +60,12 @@ def write_normal_data(data: dict):
         p = (
             Point(MEASUREMENT)
             .tag("sensor_id", data.get("sensor_id", ""))
+            .tag("unit", str(data.get("unit", "")))         # unit moved to a tag
+            .tag("attribute", str(data.get("attribute", "")))  # new tag for attribute (e.g. totalizer, flowrate, temperature)
             .field("value", float(data.get("value", 0)))
-            .field("unit", str(data.get("unit", "")))
             .time(datetime.utcnow(), WritePrecision.NS)
         )
+
         write_api.write(bucket=BUCKET, org=INFLUX_ORG, record=p)
         logger.info("Stored normal data → InfluxDB")
     except Exception as e:

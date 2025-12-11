@@ -4,7 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: scada-publisher
-    env_file: ../.env
+    env_file: ../../.env
+    volumes:
+      - ./data:/app/data
     networks:
       - setup_rabbitnet
     restart: unless-stopped

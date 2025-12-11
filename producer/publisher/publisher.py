@@ -2,6 +2,8 @@ import pika
 import json
 import os
 import time
+import csv
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,9 +14,6 @@ host = os.getenv("RABBIT_MQ_HOST")
 port = int(os.getenv("RABBIT_MQ_PORT"))
 exchange = os.getenv("RABBIT_MQ_EXCHANGE")
 routing = os.getenv("RABBIT_MQ_ROUTING_KEY")
-
-# Number of messages to send (set to None for infinite)
-MAX_MESSAGES = 10  # Change this number or set to None
 
 creds = pika.PlainCredentials(user, pw)
 
@@ -38,15 +37,51 @@ for attempt in range(max_retries):
 
 ch = conn.channel()
 
+# Function to read data from files
+def read_data_file():
+    data_dir = Path("data")
+    
+    # Check for JSON file
+    json_files = list(data_dir.glob("*.json"))
+    if json_files:
+        file_path = json_files[0]
+        print(f"Found JSON file: {file_path}")
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        return (file_path, data if isinstance(data, list) else [data])
+    
+    # Check for CSV file
+    csv_files = list(data_dir.glob("*.csv"))
+    if csv_files:
+        file_path = csv_files[0]
+        print(f"Found CSV file: {file_path}")
+        data = []
+        with open(file_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                data.append(row)
+        return (file_path, data)
+    
+    return None
+
+# Wait for data file to appear
+print("Checking for data files...")
+result = None
+while result is None:
+    result = read_data_file()
+    if result is None:
+        print("No data files found. Waiting...")
+        time.sleep(5)
+
+file_path, messages = result
+file_mtime = file_path.stat().st_mtime
+
+print(f"Loaded {len(messages)} messages from data file")
+
 # Publish messages
 message_count = 0
 try:
-    while MAX_MESSAGES is None or message_count < MAX_MESSAGES:
-        msg = {
-            "sensor_id": f"sensor-{message_count % 10}",
-            "value": 20 + (message_count % 50),
-            "unit": "C"
-        }
+    for msg in messages:
         ch.basic_publish(
             exchange=exchange,
             routing_key=routing,
@@ -60,6 +95,24 @@ try:
         time.sleep(2)  # Send a message every 2 seconds
     
     print(f"\n✓ Finished sending {message_count} messages!")
+    
+    # Wait for file to change before sending again
+    print("\nWaiting for data file to be updated...")
+    while True:
+        time.sleep(5)
+        if file_path.exists():
+            current_mtime = file_path.stat().st_mtime
+            if current_mtime != file_mtime:
+                print("File has been updated! Restarting...")
+                break
+        else:
+            print("File was deleted. Checking for new files...")
+            new_result = read_data_file()
+            if new_result:
+                new_file_path, _ = new_result
+                if new_file_path != file_path:
+                    print("New file detected! Restarting...")
+                    break
         
 except KeyboardInterrupt:
     print("\nPublisher stopped by user")

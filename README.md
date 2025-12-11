@@ -61,6 +61,7 @@ docker ps | grep rabbitmq
 ```bash
 cd ../publisher  # From setup directory
 docker compose up -d --build
+docker compose --env-file ../.env up -d --build   #for consumer
 ```
 
 **What this does:**

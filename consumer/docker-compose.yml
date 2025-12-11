@@ -4,13 +4,15 @@ services:
     container_name: influxdb
     ports:
       - "8086:8086"
+    env_file:
+      - ../.env
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
-      - DOCKER_INFLUXDB_INIT_ORG=my-org
-      - DOCKER_INFLUXDB_INIT_BUCKET=scada_bucket
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=5uhYaQLHEJCAHkkrAvbKm4YuH97Uq0InYmNI2zQSnG9phe4Bu1BuYKqh5ALUAu-2nH0BZnNvgdmHtNedgWW3LA==
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUX_DB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUX_DB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUX_DB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUX_DB_BUCKET_NS}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUX_DB_TOKEN}
     volumes:
       - influxdb-data:/var/lib/influxdb2
     networks:
@@ -26,31 +28,20 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: scada_consumer
-    environment:
-      RABBIT_MQ_HOST: rabbitmq
-      RABBIT_MQ_PORT: 5672
-      RABBIT_MQ_USER: guest
-      RABBIT_MQ_PASSWORD: guest
-      RABBIT_MQ_EXCHANGE: scada_data
-      RABBIT_MQ_QUEUE: scada_data_queue
-      RABBIT_MQ_ROUTING_KEY: scada.tag.data
-      RABBIT_MQ_HEALTH_DATA_QUEUE: sensor_health_data_queue
-      RABBIT_MQ_HEALTH_DATA_ROUTING_KEY: scada.sensor.health
-      INFLUX_DB_URL: http://influxdb:8086
-      INFLUX_DB_TOKEN: 5uhYaQLHEJCAHkkrAvbKm4YuH97Uq0InYmNI2zQSnG9phe4Bu1BuYKqh5ALUAu-2nH0BZnNvgdmHtNedgWW3LA==
-      INFLUX_DB_ORG: my-org
-      INFLUX_DB_BUCKET_NS: scada_bucket
-      INFLUX_DB_MEASUREMENT: sensor_data
-      INFLUX_DB_HEALTH_DATA_MEASUREMENT: sensor_health_data
+    env_file:
+      - ../.env
     depends_on:
       influxdb:
         condition: service_healthy
     networks:
       - app_network
+      - setup_rabbitnet  # Added: Connect to RabbitMQ network
 
 networks:
   app_network:
     driver: bridge
+  setup_rabbitnet:
+    external: true  # Added: Use the external RabbitMQ network
 
 volumes:
   influxdb-data:
