@@ -23,3 +23,9 @@ primary_region = "sin"
 
   [[services.ports]]
     port = 15672
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 15672

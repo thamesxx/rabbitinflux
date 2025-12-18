@@ -1,10 +1,5 @@
-FROM python:3.11-slim
+FROM rabbitmq:3.13-management
 
-WORKDIR /app
+COPY definitions.json /etc/rabbitmq/definitions.json
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY setup_rabbitmq.py .
-
-CMD ["python", "setup_rabbitmq.py"]
+ENV RABBITMQ_LOAD_DEFINITIONS=/etc/rabbitmq/definitions.json
