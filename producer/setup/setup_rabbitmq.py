@@ -91,6 +91,10 @@ def connect_with_retries():
 def main():
     print("Starting RabbitMQ setup script with configuration:")
     print(f"  USER={USER}, HOST={HOST}, PORT={PORT}, EXCHANGE={EXCHANGE}")
+
+    print("Waiting 10 seconds for RabbitMQ AMQP to be fully ready...")
+    time.sleep(10)
+
     try:
         conn = connect_with_retries()
     except SystemExit as e:
