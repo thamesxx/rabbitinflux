@@ -7,10 +7,4 @@ services:
     env_file: ../../.env
     volumes:
       - ./data:/app/data
-    networks:
-      - setup_rabbitnet
     restart: unless-stopped
-
-networks:
-  setup_rabbitnet:
-    external: true
