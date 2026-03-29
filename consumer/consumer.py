@@ -1,28 +1,37 @@
+# consumer.py
 import pika
 import json
 import logging
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from datetime import datetime
+# from influxdb_client import InfluxDBClient, Point, WritePrecision
+# from datetime import datetime
 import os
 import time
 from dotenv import load_dotenv
+from pymongo import MongoClient, ASCENDING
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("consumer")
 
-# ===== InfluxDB Config =====
-INFLUX_URL = os.getenv("INFLUX_DB_URL")
-INFLUX_TOKEN = os.getenv("INFLUX_DB_TOKEN")
-INFLUX_ORG = os.getenv("INFLUX_DB_ORG")
-BUCKET = os.getenv("INFLUX_DB_BUCKET_NS")
-MEASUREMENT = os.getenv("INFLUX_DB_MEASUREMENT")
-HEALTH_MEASUREMENT = os.getenv("INFLUX_DB_HEALTH_DATA_MEASUREMENT")
+# ===== MongoDB Config =====
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB = os.getenv("MONGO_DB", "machine_db")
 
-# Influx client
-client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-write_api = client.write_api()
+mongo_client = MongoClient(MONGO_URI)
+mongo_db = mongo_client[MONGO_DB]
+readings_col = mongo_db["machine_readings"]
+readings_col.create_index([("session_id", ASCENDING), ("seq", ASCENDING)])
+
+# ===== InfluxDB Config (commented out) =====
+# INFLUX_URL = os.getenv("INFLUX_DB_URL")
+# INFLUX_TOKEN = os.getenv("INFLUX_DB_TOKEN")
+# INFLUX_ORG = os.getenv("INFLUX_DB_ORG")
+# BUCKET = os.getenv("INFLUX_DB_BUCKET_NS")
+# MEASUREMENT = os.getenv("INFLUX_DB_MEASUREMENT")
+# HEALTH_MEASUREMENT = os.getenv("INFLUX_DB_HEALTH_DATA_MEASUREMENT")
+# influx_client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+# write_api = influx_client.write_api()
 
 # ===== RabbitMQ Config =====
 RABBIT_USER = os.getenv("RABBIT_MQ_USER")
@@ -37,60 +46,50 @@ ROUTING = os.getenv("RABBIT_MQ_ROUTING_KEY")
 HEALTH_QUEUE = os.getenv("RABBIT_MQ_HEALTH_DATA_QUEUE")
 HEALTH_ROUTING = os.getenv("RABBIT_MQ_HEALTH_DATA_ROUTING_KEY")
 
-def wait_for_influxdb():
-    max_retries = 10
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Checking InfluxDB connection (attempt {attempt + 1}/{max_retries})...")
-            health = client.health()
-            if health.status == "pass":
-                logger.info("InfluxDB is ready!")
-                return True
-        except Exception as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"InfluxDB not ready, retrying in 3s...")
-                time.sleep(3)
-            else:
-                logger.error("InfluxDB not available after max retries")
-                raise
-    return False
 
-def write_normal_data(data: dict):
+def write_to_mongo(data: dict):
     try:
-        p = (
-            Point(MEASUREMENT)
-            .tag("sensor_id", data.get("sensor_id", ""))
-            .tag("unit", str(data.get("unit", "")))         # unit moved to a tag
-            .tag("attribute", str(data.get("attribute", "")))  # new tag for attribute (e.g. totalizer, flowrate, temperature)
-            .field("value", float(data.get("value", 0)))
-            .time(datetime.utcnow(), WritePrecision.NS)
-        )
-
-        write_api.write(bucket=BUCKET, org=INFLUX_ORG, record=p)
-        logger.info("Stored normal data → InfluxDB")
+        readings_col.insert_one(data)
+        logger.info(f"Stored to MongoDB → session={data.get('session_id', '?')}  seq={data.get('seq', '?')}")
     except Exception as e:
-        logger.error(f"ERROR writing normal data: {e}")
+        logger.error(f"ERROR writing to MongoDB: {e}")
 
 
-def write_health_data(data: dict):
-    try:
-        p = (
-            Point(HEALTH_MEASUREMENT)
-            .tag("sensor_id", str(data.get("sensor_id")))
-            .field("success_request", float(data.get("success_request", 0)))
-            .field("total_request", float(data.get("total_request", 0)))
-            .time(datetime.utcnow(), WritePrecision.NS)
-        )
-        write_api.write(bucket=BUCKET, org=INFLUX_ORG, record=p)
-        logger.info("Stored health data → InfluxDB")
-    except Exception as e:
-        logger.error(f"ERROR writing health data: {e}")
+# ===== InfluxDB write functions (commented out) =====
+# def write_normal_data(data: dict):
+#     try:
+#         p = (
+#             Point(MEASUREMENT)
+#             .tag("sensor_id", data.get("sensor_id", ""))
+#             .tag("unit", str(data.get("unit", "")))
+#             .tag("attribute", str(data.get("attribute", "")))
+#             .field("value", float(data.get("value", 0)))
+#             .time(datetime.utcnow(), WritePrecision.NS)
+#         )
+#         write_api.write(bucket=BUCKET, org=INFLUX_ORG, record=p)
+#         logger.info("Stored normal data → InfluxDB")
+#     except Exception as e:
+#         logger.error(f"ERROR writing normal data: {e}")
+#
+# def write_health_data(data: dict):
+#     try:
+#         p = (
+#             Point(HEALTH_MEASUREMENT)
+#             .tag("sensor_id", str(data.get("sensor_id")))
+#             .field("success_request", float(data.get("success_request", 0)))
+#             .field("total_request", float(data.get("total_request", 0)))
+#             .time(datetime.utcnow(), WritePrecision.NS)
+#         )
+#         write_api.write(bucket=BUCKET, org=INFLUX_ORG, record=p)
+#         logger.info("Stored health data → InfluxDB")
+#     except Exception as e:
+#         logger.error(f"ERROR writing health data: {e}")
 
 
 def on_message(ch, method, props, body):
     try:
         data = json.loads(body)
-        write_normal_data(data)
+        write_to_mongo(data)
     except Exception as e:
         logger.error(f"Error processing message: {e}")
     ch.basic_ack(method.delivery_tag)
@@ -99,7 +98,8 @@ def on_message(ch, method, props, body):
 def on_health_message(ch, method, props, body):
     try:
         data = json.loads(body)
-        write_health_data(data)
+        logger.info(f"Health message received: {data}")
+        # write_health_data(data)  # swap in when InfluxDB is re-enabled
     except Exception as e:
         logger.error(f"Error processing health message: {e}")
     ch.basic_ack(method.delivery_tag)
@@ -120,8 +120,7 @@ def connect_and_consume():
             logger.info("Connected to RabbitMQ")
 
             ch = connection.channel()
-            
-            # FIXED: Changed to 'topic' to match producer
+
             ch.exchange_declare(exchange=EXCHANGE, exchange_type="topic", durable=True)
 
             # Normal queue
@@ -145,5 +144,4 @@ def connect_and_consume():
 
 
 if __name__ == "__main__":
-    wait_for_influxdb()
     connect_and_consume()

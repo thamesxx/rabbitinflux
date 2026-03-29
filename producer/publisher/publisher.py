@@ -1,10 +1,10 @@
+# publisher.py
 import pika
 import json
 import os
 import time
-import csv
-from pathlib import Path
 from dotenv import load_dotenv
+from machine_data_generator import SyntheticMachineGenerator
 
 load_dotenv()
 
@@ -37,83 +37,27 @@ for attempt in range(max_retries):
 
 ch = conn.channel()
 
-# Function to read data from files
-def read_data_file():
-    data_dir = Path("data")
-    
-    # Check for JSON file
-    json_files = list(data_dir.glob("*.json"))
-    if json_files:
-        file_path = json_files[0]
-        print(f"Found JSON file: {file_path}")
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-        return (file_path, data if isinstance(data, list) else [data])
-    
-    # Check for CSV file
-    csv_files = list(data_dir.glob("*.csv"))
-    if csv_files:
-        file_path = csv_files[0]
-        print(f"Found CSV file: {file_path}")
-        data = []
-        with open(file_path, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                data.append(row)
-        return (file_path, data)
-    
-    return None
+# Initialise the generator
+generator = SyntheticMachineGenerator()
+print(f"Generator ready — session_id: {generator.session_id}")
 
-# Wait for data file to appear
-print("Checking for data files...")
-result = None
-while result is None:
-    result = read_data_file()
-    if result is None:
-        print("No data files found. Waiting...")
-        time.sleep(5)
-
-file_path, messages = result
-file_mtime = file_path.stat().st_mtime
-
-print(f"Loaded {len(messages)} messages from data file")
-
-# Publish messages
+# Stream one reading every 3 seconds
 message_count = 0
 try:
-    for msg in messages:
+    while True:
+        msg = generator.generate_one()
         ch.basic_publish(
             exchange=exchange,
             routing_key=routing,
             body=json.dumps(msg),
             properties=pika.BasicProperties(
-                delivery_mode=2,  # Make message persistent
+                delivery_mode=2,  # persistent
             )
         )
-        print(f"[{message_count}] Sent: {msg}")
+        print(f"[{message_count}] Published seq={msg['seq']}  length={msg['plc']['length']}  SF_Flow={msg['utility']['SF_Flow']}")
         message_count += 1
-        time.sleep(2)  # Send a message every 2 seconds
-    
-    print(f"\n✓ Finished sending {message_count} messages!")
-    
-    # Wait for file to change before sending again
-    print("\nWaiting for data file to be updated...")
-    while True:
-        time.sleep(5)
-        if file_path.exists():
-            current_mtime = file_path.stat().st_mtime
-            if current_mtime != file_mtime:
-                print("File has been updated! Restarting...")
-                break
-        else:
-            print("File was deleted. Checking for new files...")
-            new_result = read_data_file()
-            if new_result:
-                new_file_path, _ = new_result
-                if new_file_path != file_path:
-                    print("New file detected! Restarting...")
-                    break
-        
+        time.sleep(3)
+
 except KeyboardInterrupt:
     print("\nPublisher stopped by user")
 finally:
